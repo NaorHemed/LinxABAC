@@ -16,7 +16,7 @@ namespace LinxABAC
             using (var scope = _scopeFactory.CreateScope())
             {
                 var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-                await dbContext.Database.EnsureDeletedAsync();
+                //await dbContext.Database.EnsureDeletedAsync();
                 await dbContext.Database.EnsureCreatedAsync();
             }
         }

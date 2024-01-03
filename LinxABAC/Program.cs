@@ -16,7 +16,10 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseSqlServer(builder.Configuration.GetConnectionString("SqlServer")));
+
+//build the database when app starts
+builder.Services.AddHostedService<DatabaseWarmup>();
 
 var app = builder.Build();
 
