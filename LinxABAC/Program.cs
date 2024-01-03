@@ -25,6 +25,7 @@ builder.Services.AddScoped<IAttributesService, AttributesService>();
 builder.Services.AddScoped<IUserAttribtuesService, UserAttribtuesService>(); 
 builder.Services.AddScoped<IPolicyService, PolicyService>();
 builder.Services.AddScoped<IResourceService, ResourceService>();
+builder.Services.AddScoped<IUserAuthorizationService, UserAuthorizationService>();
 
 var app = builder.Build();
 
@@ -77,7 +78,7 @@ app.MapPut("/policies/{policyName}", (string policyName, List<PolicyConditionDto
     return Results.Ok();
 });
 
-app.MapPost("/users", async (Dictionary<string, string> attributes, IUserAttribtuesService userAttribtuesService) =>
+app.MapPost("/users", (Dictionary<string, string> attributes, IUserAttribtuesService userAttribtuesService) =>
 {
     Guid? userId = userAttribtuesService.CreateUser(attributes);
     if (userId == null)
@@ -113,7 +114,7 @@ app.MapGet("/resources/{resourceName}", ([FromRoute] string resourceName, IRedis
     return Results.Ok(resourcePolicies);
 });
 
-app.MapPost("/resources", async (CreateResourceRequest request, IResourceService resourceService) =>
+app.MapPost("/resources", (CreateResourceRequest request, IResourceService resourceService) =>
 {
     bool success = resourceService.CreateResource(request);
     if (success == false)
@@ -122,10 +123,15 @@ app.MapPost("/resources", async (CreateResourceRequest request, IResourceService
     return Results.Ok();
 });
 
+app.MapGet("/authorize", (string resourceName, Guid userId, IUserAuthorizationService userAuthorizationService) =>
+{
+    bool isAuthorized = userAuthorizationService.IsAuthorized2(resourceName, userId.ToString());
+    return Results.Ok(new { isAuthorized = isAuthorized });
+});
+
 app.Run();
 
 public record AttributeDefinitionDto(string attributeName, string attributeType);
 public record PolicyDefinitionDto(string policyName, List<PolicyConditionDto> conditions);
 public record PolicyConditionDto(string attributeName, string @operator, string value);
-public record UpdateUserAttributesRequest(Guid userId, Dictionary<string, string> attributes);
 public record CreateResourceRequest(string resourceName, List<string> Policies);
