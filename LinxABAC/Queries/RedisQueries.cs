@@ -2,60 +2,67 @@
 
 namespace LinxABAC.Queries
 {
-    public interface IComputedResultsQueries
+    public interface IRedisQueries
     {
         //user attribtues section
-        public List<string>? GetUserAttributes(int userId);
-        public string? GetUserAttribute(int userId, string attribute);
-        public void SetUserAttribute(int userId, string attribute, string value);
-        public void DeleteUserAttribute(int userId, string attribute);
+        public List<string>? GetUserAttributes(string userId);
+        public string? GetUserAttribute(string userId, string attribute);
+        public void SetUserAttribute(string userId, string attribute, string value);
+        public void SetUserAttributes(string userId, Dictionary<string, string> attributes);
+        public void DeleteUserAttribute(string userId, string attribute);
         //policy users results section
-        public bool GetPolicyUsersResults(string policyName, int userId);
-        public void SetPolicyUsersResults(string policyName, int userId, bool allowed);
+        public bool GetPolicyUsersResults(string policyName, string userId);
+        public void SetPolicyUsersResults(string policyName, string userId, bool allowed);
         public void DeletePolicyUsersResults(string policyName);
         //resource computed results section
-        public string? GetResourceUserAccess(string resourceName, int userId);
-        public void SetResourceUserAccess(string resourceName, int userId, string policyName);
+        public string? GetResourceUserAccess(string resourceName, string userId);
+        public void SetResourceUserAccess(string resourceName, string userId, string policyName);
     }
-    public class ComputedResultsQueries : IComputedResultsQueries
+    public class RedisQueries : IRedisQueries
     {
         private readonly IConnectionMultiplexer _connectionMultiplexer;
         private readonly IDatabase _database;
-        public ComputedResultsQueries(IConnectionMultiplexer connectionMultiplexer)
+        public RedisQueries(IConnectionMultiplexer connectionMultiplexer)
         {
             _connectionMultiplexer = connectionMultiplexer;
             _database = _connectionMultiplexer.GetDatabase();
         }
 
-        public List<string>? GetUserAttributes(int userId)
+        public List<string>? GetUserAttributes(string userId)
         {
             return _database.HashGetAll($"UserAttributes_{userId}").Select(h => h.ToString()).ToList();
         }
 
 
-        public string? GetUserAttribute(int userId, string attribute)
+        public string? GetUserAttribute(string userId, string attribute)
         {
             return _database.HashGet($"UserAttributes_{userId}", attribute);
         }
 
-        public void SetUserAttribute(int userId, string attribute, string value)
+        public void SetUserAttribute(string userId, string attribute, string value)
         {
             _database.HashSetAsync($"UserAttributes_{userId}", attribute, value);
         }
 
-        public void DeleteUserAttribute(int userId, string attribute)
+        public void SetUserAttributes(string userId, Dictionary<string,string> attributes) 
+        {
+            HashEntry[] hashEntries = attributes.Select(kv => new HashEntry(kv.Key, kv.Value)).ToArray();
+            _database.HashSet($"UserAttributes_{userId}", hashEntries);
+        }
+
+        public void DeleteUserAttribute(string userId, string attribute)
         {
             _database.HashDelete($"UserAttributes_{userId}", attribute);
         }
 
 
-        public bool GetPolicyUsersResults(string policyName, int userId)
+        public bool GetPolicyUsersResults(string policyName, string userId)
         {
             var hash = _database.HashGet($"PolicyUsersResults_{policyName}", userId);
             return hash.HasValue && (bool)hash;
         }
 
-        public void SetPolicyUsersResults(string policyName, int userId, bool allowed)
+        public void SetPolicyUsersResults(string policyName, string userId, bool allowed)
         {
             _database.HashSet($"PolicyUsersResults_{policyName}", userId.ToString(), allowed);
         }
@@ -71,12 +78,12 @@ namespace LinxABAC.Queries
         /// <param name="resourceName"></param>
         /// <param name=""></param>
         /// <returns>the policy name if exists</returns>
-        public string? GetResourceUserAccess(string resourceName, int userId)
+        public string? GetResourceUserAccess(string resourceName, string userId)
         {
             return _database.HashGet($"ResourceUsersAccess_{resourceName}", userId.ToString());
         }
 
-        public void SetResourceUserAccess(string resourceName, int userId, string policyName)
+        public void SetResourceUserAccess(string resourceName, string userId, string policyName)
         {
             _database.HashSet($"ResourceUsersAccess_{resourceName}", userId.ToString(), policyName);
         }

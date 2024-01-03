@@ -65,4 +65,10 @@ namespace LinxABAC.Models.AbacPermissions
         public int PolicyDefinitionId { get; set; }
         public PolicyDefinition Policy { get; set; } = null!; 
     }
+
+    public class User
+    {
+        [Key, MaxLength(16)]
+        public Guid UserId { get; set; }
+    }
 }

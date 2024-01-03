@@ -10,6 +10,7 @@ namespace LinxABAC.Database
         public DbSet<PolicyDefinition> Policies { get; set; }
         public DbSet<PolicyCondition> PolicyConditions { get; set; }
         public DbSet<ResourceDefinition> Resources { get; set; }
+        public DbSet<User> Users { get; set; }
 
         public AppDbContext(DbContextOptions options) : base(options)
         {

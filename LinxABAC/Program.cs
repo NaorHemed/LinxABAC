@@ -1,10 +1,14 @@
 using LinxABAC;
 using LinxABAC.Database;
+using LinxABAC.Logic;
 using LinxABAC.Models.AbacPermissions;
 using LinxABAC.Queries;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion.Internal;
 using StackExchange.Redis;
+using System.Dynamic;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -18,7 +22,8 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 IConnectionMultiplexer redis = ConnectionMultiplexer.Connect(builder.Configuration.GetConnectionString("Redis"));
 builder.Services.AddSingleton(redis);
-builder.Services.AddSingleton<IComputedResultsQueries>();
+builder.Services.AddSingleton<IRedisQueries, RedisQueries>();
+builder.Services.AddScoped<IUserAttribtuesService, UserAttribtuesService>(); 
 
 
 //build the database when app starts
@@ -34,7 +39,7 @@ if (app.Environment.IsDevelopment())
 }
 
 
-app.MapGet("/attributes", async ([FromServices] AppDbContext dbContext) =>
+app.MapGet("/attributes", async (AppDbContext dbContext) =>
 {
     var attributes = await dbContext.Attributes.Select(a => new AttributeDefinitionDto(a.AttributeName, a.AttributeType))
         .ToListAsync();
@@ -42,17 +47,21 @@ app.MapGet("/attributes", async ([FromServices] AppDbContext dbContext) =>
     return Results.Ok(attributes);
 });
 
-app.MapPost("/attributes", async ([FromBody] AttributeDefinitionDto request, [FromServices] AppDbContext dbContext) =>
+app.MapPost("/attributes", async (AttributeDefinitionDto request, AppDbContext dbContext) =>
 {
-    if (request.attributeType != "boolean" &&
-    request.attributeType != "string" &&
-    request.attributeType != "integer")
+    if (request.attributeType != Constants.IntegerAttribute &&
+    request.attributeType != Constants.StringAttribute &&
+    request.attributeType != Constants.BooleanAttribute)
     {
         return Results.BadRequest("Invalid attribute type");
     }
 
     if ((await dbContext.Attributes.CountAsync()) > Constants.MaxAttributes)
         return Results.BadRequest("Too many attributes");
+
+    if (await dbContext.Attributes.AnyAsync(a => a.AttributeName == request.attributeName))
+        return Results.BadRequest("Attribute already exists");
+
 
     await dbContext.Attributes.AddAsync(new AttributeDefinition
     {
@@ -64,64 +73,41 @@ app.MapPost("/attributes", async ([FromBody] AttributeDefinitionDto request, [Fr
     return Results.Ok();
 });
 
-app.MapPost("/policies", async ([FromBody] PolicyDefinitionDto request, [FromServices] AppDbContext dbContext) =>
+app.MapPost("/policies", async (PolicyDefinitionDto request, IPolicyService policyService) =>
 {
-    //check count of policies in the request
-    if (request.conditions.Count > Constants.MaxConditionsPerPolicy)
-        return Results.BadRequest("Too many conditions for policy");
-
-    //check valid operator on all condiions
-    bool allConditionsHasValidOperator = request.conditions.All(condition =>
-        condition.@operator == ">" ||
-        condition.@operator == "<" ||
-        condition.@operator == "=" ||
-        condition.@operator == "starts_with");
-
-    //bad request any has invalid operator
-    if (!allConditionsHasValidOperator)
-        return Results.BadRequest("Invalid operator detected in conditions");
-
-
-
-    //check db for policy name
-    var dbPolicy = dbContext.Policies.FirstOrDefaultAsync(p => p.PolicyName == request.policyName);
-    if (dbPolicy != null)
-        return Results.BadRequest("Policy with same name already exists");
-
-    //check distinct attributs definition exists
-    var dbAttributes = new Dictionary<string, AttributeDefinition>();
-    //get all attributes from DB with distinct for effiencey 
-    foreach (var conditionAttributeName in request.conditions.Select(c => c.attributeName).Distinct()) 
-    {
-        var dbAttribtue = await dbContext.Attributes.FirstOrDefaultAsync(attribute => attribute.AttributeName == conditionAttributeName);
-
-        if (dbAttribtue == null)
-            return Results.BadRequest("Invalid attribute in condition, attribute is not defined");
-        else
-            dbAttributes[conditionAttributeName] = dbAttribtue;
-    }
-
-    PolicyDefinition policy = new PolicyDefinition() {  PolicyName = request.policyName };
-    using (var t = await dbContext.Database.BeginTransactionAsync())
-    {
-        await dbContext.Policies.AddAsync(policy);
-        await dbContext.PolicyConditions.AddRangeAsync(request.conditions.Select(c => new PolicyCondition
-        {
-            AttributeDefinitionId = dbAttributes[c.attributeName].AttributeDefinitionId,
-            Operator = c.@operator,
-            PolicyDefinitionId = policy.PolicyDefinitionId
-        }));
-        await dbContext.SaveChangesAsync();
-        await t.CommitAsync();
-    }
+    string? errorMsg = await policyService.CreatePolicyAsync(request);
+    if (errorMsg != null)
+        return Results.BadRequest(errorMsg);
 
     return Results.Ok();
 });
 
+app.MapPost("/users", async (Dictionary<string,string> attributes, AppDbContext dbContext, IRedisQueries redisQueries) =>
+{
+    Guid userId = Guid.NewGuid();
+    await dbContext.Users.AddAsync(new User { UserId = userId }); //store to database
+    redisQueries.SetUserAttributes(userId.ToString(), attributes); //set attributes in redis
+    await dbContext.SaveChangesAsync();
+    return Results.Ok(new { userId = userId });
+});
 
+app.MapGet("/users/{userId}", ([FromRoute]Guid userId, IRedisQueries redisQueries) =>
+{
+    return Results.Ok(redisQueries.GetUserAttributes(userId.ToString()));
+});
+
+app.MapPut("/users", async (UpdateUserAttributesRequest request, IUserAttribtuesService userAttribtuesService) =>
+{
+    string? errorMsg = await userAttribtuesService.SetUserAttributesAsync(request.userId, request.attributes);
+    if (errorMsg != null)
+        return Results.BadRequest(errorMsg);
+
+    return Results.Ok();
+});
 
 app.Run();
 
-internal record AttributeDefinitionDto(string attributeName, string attributeType);
-internal record PolicyDefinitionDto(string policyName, List<PolicyConditionDto> conditions);
-internal record PolicyConditionDto(string attributeName, string @operator, string value);
+public record AttributeDefinitionDto(string attributeName, string attributeType);
+public record PolicyDefinitionDto(string policyName, List<PolicyConditionDto> conditions);
+public record PolicyConditionDto(string attributeName, string @operator, string value);
+public record UpdateUserAttributesRequest(Guid userId, Dictionary<string, string> attributes);

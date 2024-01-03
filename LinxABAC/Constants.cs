@@ -9,5 +9,10 @@
         public const int MaxConditionsPerPolicy = 20;
         public const int MaxPoliciesPerResource = 100;
         public const int MaxUserAttributeChangesPerSecond = 10;
+
+        public const string IntegerAttribute = "integer";
+        public const string BooleanAttribute = "boolean";
+        public const string StringAttribute = "string";
+
     }
 }
