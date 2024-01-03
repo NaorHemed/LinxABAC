@@ -1,4 +1,4 @@
-﻿using LinxABAC.Database;
+﻿
 using LinxABAC.Queries;
 using Microsoft.EntityFrameworkCore;
 
@@ -6,16 +6,17 @@ namespace LinxABAC.Logic
 {
     public interface IUserAttribtuesService
     {
-        public Task<string?> SetUserAttributesAsync(Guid userId, Dictionary<string, string> attributes);
+        public Guid? CreateUser(Dictionary<string, string> attributes);
+        public bool SetUserAttributes(Guid userId, Dictionary<string, string> attributes);
     }
     public class UserAttribtuesService : IUserAttribtuesService
     {
-        private readonly AppDbContext _dbContext;
         private readonly IRedisQueries _redisQueries;
-        public UserAttribtuesService(AppDbContext dbContext, IRedisQueries redisQueries)
+        private readonly ILogger<UserAttribtuesService> _logger;
+        public UserAttribtuesService(IRedisQueries redisQueries, ILogger<UserAttribtuesService> logger)
         {
-            _dbContext = dbContext;
             _redisQueries = redisQueries;
+            _logger = logger;
         }
 
         /// <summary>
@@ -24,34 +25,67 @@ namespace LinxABAC.Logic
         /// <param name="userId"></param>
         /// <param name="attributes"></param>
         /// <returns>null for sucess, error string for validation failure</returns>
-        public async Task<string?> ValidateAttributeTypesAsync(Dictionary<string,string> attributes)
+        public bool ValidateAttributeTypes(Dictionary<string, string> attributes)
         {
             foreach (var attributeKV in attributes)
             {
-                var attribute = await _dbContext.Attributes.FirstOrDefaultAsync(a => a.AttributeName == attributeKV.Key);
+                string? attributeType = _redisQueries.GetAttributeDefinition(attributeKV.Key);
 
-                if (attribute == null)
-                    return $"Failed to find attribute definition for '{attributeKV.Key}'";
+                if (attributeType == null)
+                {
+                    _logger.LogWarning($"Failed to find attribute definition for '{attributeKV.Key}'");
+                    return false;
+                }
 
-                if (attribute.AttributeType == Constants.IntegerAttribute && !int.TryParse(attributeKV.Value, out _))
-                    return $"Invalid attribute type for '{attributeKV.Key}'";
+                if (attributeType == Constants.IntegerAttribute && !int.TryParse(attributeKV.Value, out _))
+                {
+                    _logger.LogWarning($"Invalid attribute type for '{attributeKV.Key}'");
+                    return false;
+                }
 
-                if (attribute.AttributeType == Constants.BooleanAttribute && !bool.TryParse(attributeKV.Value, out _))
-                    return $"Invalid attribute type for '{attributeKV.Key}'";
+                if (attributeType == Constants.BooleanAttribute && !bool.TryParse(attributeKV.Value, out _))
+                {
+                    _logger.LogWarning($"Invalid attribute type for '{attributeKV.Key}'");
+                    return false; 
+                }
             }
-            return null; //success, no error
+            return true; //success
         }
 
-        public async Task<string?> SetUserAttributesAsync(Guid userId, Dictionary<string, string> attributes)
+        public Guid? CreateUser(Dictionary<string, string> attributes)
         {
-            string? errorMsg = await ValidateAttributeTypesAsync(attributes);
+            //check user capacity if its new user
+            if (_redisQueries.GetUsersCounter() >= Constants.MaxUsers)
+            {
+                _logger.LogWarning("Too many users");
+                return null;
+            }
 
-            //validation error, dont continue
-            if (errorMsg != null) 
-                return errorMsg;
+            Guid userId = Guid.NewGuid();
+
+            if (SetUserAttributes(userId, attributes))
+            {
+                _redisQueries.IncrementUsersCounter();
+                return userId;
+            }
+            else
+            {
+                _logger.LogWarning($"Failed to create user '{userId}'");
+                return null;
+            }
+        }
+
+        public bool SetUserAttributes(Guid userId, Dictionary<string, string> attributes)
+        {
+            //check valid data types to attribute definition
+            bool validDataTypes = ValidateAttributeTypes(attributes);
+
+            if (validDataTypes == false)
+                return false;
 
             _redisQueries.SetUserAttributes(userId.ToString(), attributes);
-            return null; //success, no error
+
+            return true; //success
         }
     }
 }
