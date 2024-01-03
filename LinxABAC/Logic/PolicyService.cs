@@ -35,7 +35,7 @@ namespace LinxABAC.Logic
         public async Task<string?> CreatePolicyAsync(PolicyDefinitionDto request)
         {
             //check count of policies in the request
-            if (request.conditions.Count > Constants.MaxConditionsPerPolicy)
+            if (request.conditions.Count >= Constants.MaxConditionsPerPolicy)
                 return "Too many conditions for policy";
 
             if (request.conditions.Count == 0)
