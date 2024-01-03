@@ -2,10 +2,12 @@ using Amazon.Runtime.Internal;
 using LinxABAC;
 using LinxABAC.Database;
 using LinxABAC.Models.AbacPermissions;
+using LinxABAC.Queries;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using MongoDB.Driver.Core.Operations;
+using StackExchange.Redis;
 using System.ComponentModel;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -17,6 +19,11 @@ builder.Services.AddSwaggerGen();
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("SqlServer")));
+
+IConnectionMultiplexer redis = ConnectionMultiplexer.Connect(builder.Configuration.GetConnectionString("Redis"));
+builder.Services.AddSingleton(redis);
+builder.Services.AddSingleton<IComputedResultsQueries>();
+
 
 //build the database when app starts
 builder.Services.AddHostedService<DatabaseWarmup>();
