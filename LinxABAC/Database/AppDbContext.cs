@@ -27,6 +27,27 @@ namespace LinxABAC.Database
             modelBuilder.Entity<ResourceDefinition>()
                 .HasIndex(entity => entity.ResourceName).IsUnique(); // no duplicate resource names
 
+            //one to many between policy condition and policy, 
+            modelBuilder.Entity<PolicyCondition>()
+                .HasOne(e => e.Policy).WithMany(e => e.PolicyConditions)
+                .HasForeignKey(e => e.PolicyDefinitionId)
+                .OnDelete(DeleteBehavior.Cascade); //when delete policy removes all its conditions
+
+            modelBuilder.Entity<ResourcePoliciesDefinition>(entity =>
+            {
+                entity.HasKey(e => new { e.PolicyDefinitionId, e.ResourceDefinitionId }); //primary key
+
+                entity.HasOne(e => e.Policy).WithMany(e => e.ResourcePolicies)
+                    .HasForeignKey(e => e.PolicyDefinitionId)
+                    .OnDelete(DeleteBehavior.Restrict); //prevent delete policy used by resource
+
+
+                entity.HasOne(e => e.Resource).WithMany(e => e.ResourcePolicies)
+                    .HasForeignKey(e => e.ResourceDefinitionId)
+                    .OnDelete(DeleteBehavior.Restrict); //prevent delete resource used by policy
+            });
+
+
             base.OnModelCreating(modelBuilder);
         }
     }

@@ -60,6 +60,10 @@ app.MapPost("/attributes", async ([FromBody] AttributeDefinitionDto request, [Fr
 
 app.MapPost("/policies", async ([FromBody] PolicyDefinitionDto request, [FromServices] AppDbContext dbContext) =>
 {
+    //check count of policies in the request
+    if (request.conditions.Count > Constants.MaxConditionsPerPolicy)
+        return Results.BadRequest("Too many conditions for policy");
+
     //check valid operator on all condiions
     bool allConditionsHasValidOperator = request.conditions.All(condition =>
         condition.@operator == ">" ||
@@ -70,6 +74,8 @@ app.MapPost("/policies", async ([FromBody] PolicyDefinitionDto request, [FromSer
     //bad request any has invalid operator
     if (!allConditionsHasValidOperator)
         return Results.BadRequest("Invalid operator detected in conditions");
+
+
 
     //check db for policy name
     var dbPolicy = dbContext.Policies.FirstOrDefaultAsync(p => p.PolicyName == request.policyName);
