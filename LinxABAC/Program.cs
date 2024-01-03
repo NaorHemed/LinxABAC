@@ -24,7 +24,7 @@ IConnectionMultiplexer redis = ConnectionMultiplexer.Connect(builder.Configurati
 builder.Services.AddSingleton(redis);
 builder.Services.AddSingleton<IRedisQueries, RedisQueries>();
 builder.Services.AddScoped<IUserAttribtuesService, UserAttribtuesService>(); 
-
+builder.Services.AddScoped<IPolicyService, PolicyService>(); 
 
 //build the database when app starts
 builder.Services.AddHostedService<DatabaseWarmup>();
@@ -82,13 +82,27 @@ app.MapPost("/policies", async (PolicyDefinitionDto request, IPolicyService poli
     return Results.Ok();
 });
 
-app.MapPost("/users", async (Dictionary<string,string> attributes, AppDbContext dbContext, IRedisQueries redisQueries) =>
+app.MapPost("/users", async (Dictionary<string,string> attributes, AppDbContext dbContext, IUserAttribtuesService userAttribtuesService) =>
 {
-    Guid userId = Guid.NewGuid();
-    await dbContext.Users.AddAsync(new User { UserId = userId }); //store to database
-    redisQueries.SetUserAttributes(userId.ToString(), attributes); //set attributes in redis
-    await dbContext.SaveChangesAsync();
-    return Results.Ok(new { userId = userId });
+    using (var t = await dbContext.Database.BeginTransactionAsync())
+    {
+        Guid userId = Guid.NewGuid();
+        await dbContext.Users.AddAsync(new User { UserId = userId }); //store to database
+
+        string? errorMsg = await userAttribtuesService.SetUserAttributesAsync(userId, attributes); //set attributes in redis
+
+        if (errorMsg == null)
+        {
+            await dbContext.SaveChangesAsync();
+            await t.CommitAsync();
+            return Results.Ok(new { userId = userId });
+        }
+        else
+        {
+            t.Rollback();
+            return Results.BadRequest(errorMsg);
+        }
+    }
 });
 
 app.MapGet("/users/{userId}", ([FromRoute]Guid userId, IRedisQueries redisQueries) =>

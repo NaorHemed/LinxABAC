@@ -52,7 +52,7 @@ namespace LinxABAC.Logic
 
 
             //check db for policy name
-            var dbPolicy = _dbContext.Policies.FirstOrDefaultAsync(p => p.PolicyName == request.policyName);
+            var dbPolicy = await _dbContext.Policies.FirstOrDefaultAsync(p => p.PolicyName == request.policyName);
             if (dbPolicy != null)
                 return "Policy with same name already exists";
 
@@ -79,21 +79,21 @@ namespace LinxABAC.Logic
             }
 
             PolicyDefinition policy = new PolicyDefinition() { PolicyName = request.policyName };
-            using (var t = await _dbContext.Database.BeginTransactionAsync())
-            {
-                await _dbContext.Policies.AddAsync(policy);
-                await _dbContext.PolicyConditions.AddRangeAsync(request.conditions.Select(c => new PolicyCondition
-                {
-                    AttributeDefinitionId = dbAttributes[c.attributeName].AttributeDefinitionId,
-                    Operator = c.@operator,
-                    PolicyDefinitionId = policy.PolicyDefinitionId
-                }));
-                await _dbContext.SaveChangesAsync();
 
-                //clear the evaluation of policy results for all users that it is precomputed
-                _redisQueries.DeletePolicyUsersResults(policy.PolicyName); 
-                await t.CommitAsync();
-            }
+            await _dbContext.Policies.AddAsync(policy);
+            await _dbContext.PolicyConditions.AddRangeAsync(request.conditions.Select(c => new PolicyCondition
+            {
+                AttributeDefinitionId = dbAttributes[c.attributeName].AttributeDefinitionId,
+                PolicyDefinitionId = policy.PolicyDefinitionId,
+                Operator = c.@operator,
+                Value = c.value,
+                Policy = policy
+            }));
+            await _dbContext.SaveChangesAsync();
+
+            //Important!!
+            //clear the evaluation of policy results for all users that it is precomputed
+            _redisQueries.DeletePolicyUsersResults(policy.PolicyName);
 
             return null;
         }

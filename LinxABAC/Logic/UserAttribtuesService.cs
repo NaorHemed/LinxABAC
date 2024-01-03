@@ -6,7 +6,6 @@ namespace LinxABAC.Logic
 {
     public interface IUserAttribtuesService
     {
-        public Task<string?> ValidateAttributeTypesAsync(Dictionary<string, string> attributes);
         public Task<string?> SetUserAttributesAsync(Guid userId, Dictionary<string, string> attributes);
     }
     public class UserAttribtuesService : IUserAttribtuesService

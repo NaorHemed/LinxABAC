@@ -5,7 +5,7 @@ namespace LinxABAC.Queries
     public interface IRedisQueries
     {
         //user attribtues section
-        public List<string>? GetUserAttributes(string userId);
+        public Dictionary<string, string>? GetUserAttributes(string userId);
         public string? GetUserAttribute(string userId, string attribute);
         public void SetUserAttribute(string userId, string attribute, string value);
         public void SetUserAttributes(string userId, Dictionary<string, string> attributes);
@@ -28,11 +28,11 @@ namespace LinxABAC.Queries
             _database = _connectionMultiplexer.GetDatabase();
         }
 
-        public List<string>? GetUserAttributes(string userId)
+        public Dictionary<string,string>? GetUserAttributes(string userId)
         {
-            return _database.HashGetAll($"UserAttributes_{userId}").Select(h => h.ToString()).ToList();
+            return _database.HashGetAll($"UserAttributes_{userId}")
+                .ToDictionary(h => h.Name.ToString(), h => h.Value.ToString());
         }
-
 
         public string? GetUserAttribute(string userId, string attribute)
         {
