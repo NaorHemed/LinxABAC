@@ -12,6 +12,7 @@ namespace LinxABAC.Queries
         public string? GetUserAttribute(string userId, string attribute);
         public void SetUserAttribute(string userId, string attribute, string value);
         public void SetUserAttributes(string userId, Dictionary<string, string> attributes);
+        public void DeleteUserAttributes(string userId);
         public void DeleteUserAttribute(string userId, string attribute);
         //policy users results section
         public bool GetPolicyUsersResults(string policyName, string userId);
@@ -25,6 +26,7 @@ namespace LinxABAC.Queries
         public bool SetAttributeDefinition(string attribute, string type);
         public string? GetAttributeDefinition(string attribute);
         //policy definitions
+        public bool PolicyExists(string policyName);
         public List<PolicyConditionDto> GetPolicy(string policyName);
         public void SetPolicy(string policyName, List<PolicyConditionDto> policyConditions);
         //resource definitions
@@ -72,6 +74,11 @@ namespace LinxABAC.Queries
         {
             HashEntry[] hashEntries = attributes.Select(kv => new HashEntry(kv.Key, kv.Value)).ToArray();
             _database.HashSet($"UserAttributes_{userId}", hashEntries);
+        }
+
+        public void DeleteUserAttributes(string userId)
+        {
+            _database.KeyDelete($"UserAttributes_{userId}");
         }
 
         public void DeleteUserAttribute(string userId, string attribute)
@@ -127,6 +134,11 @@ namespace LinxABAC.Queries
         public string? GetAttributeDefinition(string attribute)
         {
             return _database.HashGet("AttributesDefinitions", attribute);
+        }
+
+        public bool PolicyExists(string policyName)
+        {
+            return _database.KeyExists($"Policy_{policyName}");
         }
 
         public List<PolicyConditionDto> GetPolicy(string policyName)

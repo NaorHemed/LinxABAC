@@ -83,6 +83,10 @@ namespace LinxABAC.Logic
             if (validDataTypes == false)
                 return false;
 
+            //delete all current attribute data
+            _redisQueries.DeleteUserAttributes(userId.ToString());
+
+            //save new attribute values
             _redisQueries.SetUserAttributes(userId.ToString(), attributes);
 
             return true; //success

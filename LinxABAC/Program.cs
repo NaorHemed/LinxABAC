@@ -23,7 +23,8 @@ builder.Services.AddSingleton<IRedisQueries, RedisQueries>();
 
 builder.Services.AddScoped<IAttributesService, AttributesService>();
 builder.Services.AddScoped<IUserAttribtuesService, UserAttribtuesService>(); 
-builder.Services.AddScoped<IPolicyService, PolicyService>(); 
+builder.Services.AddScoped<IPolicyService, PolicyService>();
+builder.Services.AddScoped<IResourceService, ResourceService>();
 
 var app = builder.Build();
 
@@ -94,30 +95,31 @@ app.MapGet("/users/{userId}", ([FromRoute] Guid userId, IRedisQueries redisQueri
     return Results.Json(attribute);
 });
 
-app.MapPut("/users", (UpdateUserAttributesRequest request, IUserAttribtuesService userAttribtuesService) =>
+app.MapPut("/users/{userId}", ([FromRoute] Guid userId, Dictionary<string,string> attributes, IUserAttribtuesService userAttribtuesService) =>
 {
-    bool success = userAttribtuesService.SetUserAttributes(request.userId, request.attributes);
+    bool success = userAttribtuesService.SetUserAttributes(userId, attributes);
     if (success == false)
         return Results.BadRequest();
 
     return Results.Ok();
 });
 
-app.MapPost("/resources", async (CreateResourceRequest request ) =>
+app.MapGet("/resources/{resourceName}", ([FromRoute] string resourceName, IRedisQueries redisQueries) =>
 {
-    //if (await dbContext.Resources.CountAsync() >= Constants.MaxResources)
-    //    return Results.BadRequest("Too many resources");
+    var resourcePolicies = redisQueries.GetResourcePolicies(resourceName);
+    if (resourcePolicies == null || resourcePolicies.Count == 0)
+        return Results.BadRequest();
 
-    //if (await dbContext.Resources.AnyAsync(r => r.ResourceName == request.resourceName))
-    //    return Results.BadRequest("Resource already exists");
+    return Results.Ok(resourcePolicies);
+});
 
-    //var policies = request.Policies.Distinct();
-    //foreach (var policy in policies)
-    //{
-    //    //resource
-    //}
+app.MapPost("/resources", async (CreateResourceRequest request, IResourceService resourceService) =>
+{
+    bool success = resourceService.CreateResource(request);
+    if (success == false)
+        return Results.BadRequest();
 
-    //return Results.Ok();
+    return Results.Ok();
 });
 
 app.Run();

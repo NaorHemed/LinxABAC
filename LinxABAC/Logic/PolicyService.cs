@@ -113,8 +113,11 @@ namespace LinxABAC.Logic
             if (!validatePolicyCondition(conditions))
                 return false;
 
-            //save the data
+            //save the new policy
             _redisQueries.SetPolicy(policyName, conditions);
+
+            //clear precomputed user policy results because its new policy condition
+            _redisQueries.DeletePolicyUsersResults(policyName);
 
             return true;
         }
