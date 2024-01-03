@@ -56,7 +56,7 @@ app.MapPost("/attributes", async (AttributeDefinitionDto request, AppDbContext d
         return Results.BadRequest("Invalid attribute type");
     }
 
-    if ((await dbContext.Attributes.CountAsync()) > Constants.MaxAttributes)
+    if ((await dbContext.Attributes.CountAsync()) >= Constants.MaxAttributes)
         return Results.BadRequest("Too many attributes");
 
     if (await dbContext.Attributes.AnyAsync(a => a.AttributeName == request.attributeName))
@@ -119,9 +119,27 @@ app.MapPut("/users", async (UpdateUserAttributesRequest request, IUserAttribtues
     return Results.Ok();
 });
 
+app.MapPost("/resources", async (CreateResourceRequest request, AppDbContext dbContext) =>
+{
+    if (await dbContext.Resources.CountAsync() >= Constants.MaxResources)
+        return Results.BadRequest("Too many resources");
+
+    if (await dbContext.Resources.AnyAsync(r => r.ResourceName == request.resourceName))
+        return Results.BadRequest("Resource already exists");
+
+    var policies = request.Policies.Distinct();
+    foreach (var policy in policies)
+    {
+        //resource
+    }
+
+    return Results.Ok();
+});
+
 app.Run();
 
 public record AttributeDefinitionDto(string attributeName, string attributeType);
 public record PolicyDefinitionDto(string policyName, List<PolicyConditionDto> conditions);
 public record PolicyConditionDto(string attributeName, string @operator, string value);
 public record UpdateUserAttributesRequest(Guid userId, Dictionary<string, string> attributes);
+public record CreateResourceRequest(string resourceName, List<string> Policies);

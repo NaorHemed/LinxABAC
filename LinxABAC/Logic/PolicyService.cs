@@ -38,6 +38,9 @@ namespace LinxABAC.Logic
             if (request.conditions.Count > Constants.MaxConditionsPerPolicy)
                 return "Too many conditions for policy";
 
+            if (request.conditions.Count == 0)
+                return "Policy must have at least one condition";
+
             //check valid operator on all condiions
             bool allConditionsHasValidOperator = request.conditions.All(condition =>
                 condition.@operator == ">" ||
@@ -49,8 +52,6 @@ namespace LinxABAC.Logic
             if (!allConditionsHasValidOperator)
                 return "Invalid operator detected in conditions";
 
-
-
             //check db for policy name
             var dbPolicy = await _dbContext.Policies.FirstOrDefaultAsync(p => p.PolicyName == request.policyName);
             if (dbPolicy != null)
@@ -58,6 +59,7 @@ namespace LinxABAC.Logic
 
             //check distinct attributs definition exists
             var dbAttributes = new Dictionary<string, AttributeDefinition>();
+
             //get all attributes from DB with distinct for effiencey 
             foreach (var conditionAttributeName in request.conditions.Select(c => c.attributeName).Distinct())
             {
@@ -78,6 +80,7 @@ namespace LinxABAC.Logic
                     return $"Invalid operator '{condition.@operator}' for type '{dbCondition.AttributeType}' in attribute '{condition.attributeName}'";
             }
 
+            //save the data to DB
             PolicyDefinition policy = new PolicyDefinition() { PolicyName = request.policyName };
 
             await _dbContext.Policies.AddAsync(policy);

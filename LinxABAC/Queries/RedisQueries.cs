@@ -36,6 +36,8 @@ namespace LinxABAC.Queries
 
         public string? GetUserAttribute(string userId, string attribute)
         {
+            //_database.sca
+
             return _database.HashGet($"UserAttributes_{userId}", attribute);
         }
 
