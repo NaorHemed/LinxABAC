@@ -27,7 +27,6 @@ namespace LinxABAC.Database
             modelBuilder.Entity<ResourceDefinition>()
                 .HasIndex(entity => entity.ResourceName).IsUnique(); // no duplicate resource names
 
-
             modelBuilder.Entity<PolicyCondition>(entity =>
             {
                 //many to one between policy condition and policy
