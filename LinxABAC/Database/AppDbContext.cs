@@ -27,7 +27,7 @@ namespace LinxABAC.Database
             modelBuilder.Entity<ResourceDefinition>()
                 .HasIndex(entity => entity.ResourceName).IsUnique(); // no duplicate resource names
 
-            //one to many between policy condition and policy, 
+
             modelBuilder.Entity<PolicyCondition>(entity =>
             {
                 //many to one between policy condition and policy
@@ -41,7 +41,7 @@ namespace LinxABAC.Database
                     .OnDelete(DeleteBehavior.Restrict); //prevent delete attribute which is used by condition
             });
 
-
+            //many to many table between resource and policy
             modelBuilder.Entity<ResourcePoliciesDefinition>(entity =>
             {
                 entity.HasKey(e => new { e.PolicyDefinitionId, e.ResourceDefinitionId }); //primary key
