@@ -51,6 +51,8 @@ namespace LinxABAC.Logic
             _redisQueries.SetResourcePolicies(request.resourceName, request.Policies);
             //increment counter
             _redisQueries.IncrementResourceCounter();
+            //set resource last update
+            _redisQueries.SetResourceLastUpdate(request.resourceName);
 
             return true;
         }

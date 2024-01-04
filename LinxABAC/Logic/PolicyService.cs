@@ -68,10 +68,7 @@ namespace LinxABAC.Logic
             }
 
             //save the data
-            _redisQueries.SetPolicy(request.policyName, request.conditions);
-
-            //increment total policies
-            _redisQueries.IncrementPolicyCounter();
+            SavePolicy(request.policyName, request.conditions);
 
             return true;
         }
@@ -113,13 +110,22 @@ namespace LinxABAC.Logic
             if (!validatePolicyCondition(conditions))
                 return false;
 
+            //save the data
+            SavePolicy(policyName, conditions);
+
+            return true;
+        }
+
+        private void SavePolicy(string policyName, List<PolicyConditionDto> conditions)
+        {
             //save the new policy
             _redisQueries.SetPolicy(policyName, conditions);
 
             //clear precomputed user policy results because its new policy condition
             _redisQueries.DeletePolicyUsersResults(policyName);
 
-            return true;
+            //set last update time
+            _redisQueries.SetPolicyLastUpdate(policyName);
         }
     }
 }

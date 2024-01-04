@@ -89,6 +89,9 @@ namespace LinxABAC.Logic
             //save new attribute values
             _redisQueries.SetUserAttributes(userId.ToString(), attributes);
 
+            //set user last update time
+            _redisQueries.SetUserLastUpdate(userId.ToString());
+
             return true; //success
         }
     }

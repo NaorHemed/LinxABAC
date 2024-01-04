@@ -5,6 +5,7 @@ namespace LinxABAC.Logic
     public interface IUserAuthorizationService
     {
         public bool IsAuthorized2(string resourceName, string userId);
+        public bool IsAuthorized(string resourceName, string userId);
     }
     public class UserAuthorizationService : IUserAuthorizationService
     {
@@ -22,19 +23,41 @@ namespace LinxABAC.Logic
             return ComputeResourceResult(resourceName, userId);
         }
 
-        //todo
-        public bool IsAuthorized(string userId, string resourceName)
+        public bool IsAuthorized(string resourceName, string userId)
         {
-            //check if user was authorized to resource, and if so using which policy
-            string? policyName = _redisQueries.GetResourceUserAccess(userId, resourceName);
-            if (policyName != null)
+            var userLastUpdate = _redisQueries.GetUserLastUpdate(userId);
+            //check that user and resource was not update after the recomputed result
+            if (_redisQueries.GetUserResourceResultLastUpdate(userId,resourceName) > _redisQueries.GetResourceLastUpdate(resourceName) &&
+                _redisQueries.GetUserResourceResultLastUpdate(userId, resourceName) > userLastUpdate)
             {
-                //check that the policy that was used is stll valid now, and not cleard by any update to user or policy
-                bool policyAllowed = _redisQueries.GetPolicyUsersResults(policyName, userId);
-                if (policyAllowed)
-                    return true;
+                //get the policy that was last used to authorize the user to the resource
+                string? policyName = _redisQueries.GetResourceUserAccess(resourceName, userId);
+                if (policyName != null)
+                {
+                    //check that user and policy not updated after precomputed result
+                    if (_redisQueries.GetUserPolicyResultLastUpdate(userId, policyName) > _redisQueries.GetPolicyLastUpdate(policyName) &&
+                        _redisQueries.GetUserPolicyResultLastUpdate(userId, policyName) > userLastUpdate)
+                    {
+                        return true;
+                    }
+                    else
+                    { 
+                        //either the policy or user was updated, need to compute result again
+                        return ComputeResourceResult(resourceName, userId);
+                    }
+                }
+                else 
+                {
+                    //there was no update since last time the user failed to neither the resource, the polocy or the user,
+                    //if didnt pass last time it will not this time
+                    return false;
+                }
             }
-            return false;
+            else
+            {
+                //either the resource or user was updated, need to compute result again
+                return ComputeResourceResult(resourceName, userId);
+            }
         }
 
         private bool ComputeResourceResult(string resourceName, string userId)
@@ -49,6 +72,8 @@ namespace LinxABAC.Logic
                 { 
                     //setting successfull policy because we need one success to authorize
                     _redisQueries.SetResourceUserAccess(resourceName, userId, policyName);
+                    //setting result last update for user and resource
+                    _redisQueries.SetUserResourceResultLastUpdate(userId, resourceName);
                     return true;
                 }
             }
@@ -89,7 +114,8 @@ namespace LinxABAC.Logic
 
             //save computed result
             _redisQueries.SetPolicyUsersResults(policyName, userId, allowed);
-
+            //set result last update for policy + user
+            _redisQueries.SetUserPolicyResultLastUpdate(userId, policyName);
             return allowed;
         }
 

@@ -125,7 +125,7 @@ app.MapPost("/resources", (CreateResourceRequest request, IResourceService resou
 
 app.MapGet("/authorize", (string resourceName, Guid userId, IUserAuthorizationService userAuthorizationService) =>
 {
-    bool isAuthorized = userAuthorizationService.IsAuthorized2(resourceName, userId.ToString());
+    bool isAuthorized = userAuthorizationService.IsAuthorized(resourceName, userId.ToString());
     return Results.Ok(new { isAuthorized = isAuthorized });
 });
 

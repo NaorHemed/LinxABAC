@@ -41,6 +41,18 @@ namespace LinxABAC.Queries
         public void IncrementAttributesDefinitionCounter();
         public long GetUsersCounter();
         public void IncrementUsersCounter();
+        //last updates
+        public long GetUserLastUpdate(string userId);
+        public void SetUserLastUpdate(string userId);
+        public long GetPolicyLastUpdate(string policyName);
+        public void SetPolicyLastUpdate(string policyName);
+        public long GetResourceLastUpdate(string resourceName);
+        public void SetResourceLastUpdate(string resourceName);
+        public long GetUserPolicyResultLastUpdate(string userId, string policy);
+        public void SetUserPolicyResultLastUpdate(string userId, string policy);
+        public long GetUserResourceResultLastUpdate(string userId, string resource);
+        public void SetUserResourceResultLastUpdate(string userId, string resource);
+
     }
     public class RedisQueries : IRedisQueries
     {
@@ -211,5 +223,20 @@ namespace LinxABAC.Queries
         {
             _database.HashIncrement("Counters", "Users", 1);
         }
+
+        public long GetUserLastUpdate(string userId) => (long)_database.HashGet("LastUpdates_Users", userId);
+        public void SetUserLastUpdate(string userId) => _database.HashSet("LastUpdates_Users", userId, DateTimeOffset.UtcNow.Ticks);
+
+        public long GetPolicyLastUpdate(string policyName) => (long)_database.HashGet("LastUpdates_Policy", policyName);
+        public void SetPolicyLastUpdate(string policyName) => _database.HashSet("LastUpdates_Policy", policyName, DateTimeOffset.UtcNow.Ticks);
+
+        public long GetResourceLastUpdate(string resourceName) => (long)_database.HashGet("LastUpdates_Resource", resourceName);
+        public void SetResourceLastUpdate(string resourceName) => _database.HashSet("LastUpdates_Resource", resourceName, DateTimeOffset.UtcNow.Ticks);
+
+        public long GetUserPolicyResultLastUpdate(string userId, string policy) => (long)_database.HashGet($"LastUpdates_UserPolicyResult_{userId}", policy);
+        public void SetUserPolicyResultLastUpdate(string userId, string policy) => _database.HashSet($"LastUpdates_UserPolicyResult_{userId}", policy, DateTimeOffset.UtcNow.Ticks);
+
+        public long GetUserResourceResultLastUpdate(string userId, string resource) => (long)_database.HashGet($"LastUpdates_UserResourceResult_{userId}", resource);
+        public void SetUserResourceResultLastUpdate(string userId, string resource) => _database.HashSet($"LastUpdates_UserResourceResult_{userId}", resource, DateTimeOffset.UtcNow.Ticks);
     }
 }
