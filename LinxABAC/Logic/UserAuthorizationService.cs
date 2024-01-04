@@ -4,7 +4,6 @@ namespace LinxABAC.Logic
 {
     public interface IUserAuthorizationService
     {
-        public bool IsAuthorized2(string resourceName, string userId);
         public bool IsAuthorized(string resourceName, string userId);
     }
     public class UserAuthorizationService : IUserAuthorizationService
@@ -16,11 +15,6 @@ namespace LinxABAC.Logic
         {
             _redisQueries = redisQueries;
             _logger = logger;
-        }
-
-        public bool IsAuthorized2(string resourceName, string userId)
-        {
-            return ComputeResourceResult(resourceName, userId);
         }
 
         public bool IsAuthorized(string resourceName, string userId)
