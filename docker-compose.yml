@@ -1,0 +1,38 @@
+version: '3.4'
+
+services:
+  linxabac:
+    image: ${DOCKER_REGISTRY-}linxabac
+    build:
+      context: .
+      dockerfile: LinxABAC/Dockerfile
+    ports:
+      - "3000:80"
+
+  redis:
+    image: redis:latest
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - redis-net
+
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
+    networks:
+      - redis-net
+
+networks:
+  redis-net:
+    driver: bridge
+
+volumes:
+  redis-data:
