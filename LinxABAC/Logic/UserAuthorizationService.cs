@@ -27,7 +27,7 @@ namespace LinxABAC.Logic
         {
             var userLastUpdate = _redisQueries.GetUserLastUpdate(userId);
             //check that user and resource was not update after the recomputed result
-            if (_redisQueries.GetUserResourceResultLastUpdate(userId,resourceName) > _redisQueries.GetResourceLastUpdate(resourceName) &&
+            if (_redisQueries.GetUserResourceResultLastUpdate(userId, resourceName) > _redisQueries.GetResourceLastUpdate(resourceName) &&
                 _redisQueries.GetUserResourceResultLastUpdate(userId, resourceName) > userLastUpdate)
             {
                 //get the policy that was last used to authorize the user to the resource
@@ -41,12 +41,12 @@ namespace LinxABAC.Logic
                         return true;
                     }
                     else
-                    { 
+                    {
                         //either the policy or user was updated, need to compute result again
                         return ComputeResourceResult(resourceName, userId);
                     }
                 }
-                else 
+                else
                 {
                     //there was no update since last time the user failed to neither the resource, the polocy or the user,
                     //if didnt pass last time it will not this time
@@ -65,11 +65,11 @@ namespace LinxABAC.Logic
             var policies = _redisQueries.GetResourcePolicies(resourceName);
             //we will check each policy until the first passes
             //checking as little as policies as possible
-            foreach (var policyName in policies) 
+            foreach (var policyName in policies)
             {
                 bool isAllowed = ComputePolicyResult(policyName, userId);
                 if (isAllowed)
-                { 
+                {
                     //setting successfull policy because we need one success to authorize
                     _redisQueries.SetResourceUserAccess(resourceName, userId, policyName);
                     //setting result last update for user and resource
@@ -83,9 +83,18 @@ namespace LinxABAC.Logic
 
         private bool ComputePolicyResult(string policyName, string userId)
         {
+            //check previouslt computed policy result for user, if it was computed after change to user and policy, the result should not change
+            bool? policyResult = _redisQueries.GetPolicyUsersResults(policyName, userId);
+            if (policyResult.HasValue &&
+                _redisQueries.GetUserPolicyResultLastUpdate(userId, policyName) > _redisQueries.GetPolicyLastUpdate(policyName) &&
+                _redisQueries.GetUserPolicyResultLastUpdate(userId, policyName) > _redisQueries.GetUserLastUpdate(userId))
+            {
+                return policyResult.Value;
+            }
+
             var policyConditions = _redisQueries.GetPolicy(policyName);
-            var attributeValues = new Dictionary<string,string>();
-            var attributeTypes = new Dictionary<string,string>();
+            var attributeValues = new Dictionary<string, string>();
+            var attributeTypes = new Dictionary<string, string>();
             bool allowed = true;
             foreach (var policyCondition in policyConditions)
             {
@@ -109,7 +118,7 @@ namespace LinxABAC.Logic
                 {
                     allowed = false;
                     break;
-                } 
+                }
             }
 
             //save computed result

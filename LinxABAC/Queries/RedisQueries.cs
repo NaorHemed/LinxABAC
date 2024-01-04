@@ -15,7 +15,7 @@ namespace LinxABAC.Queries
         public void DeleteUserAttributes(string userId);
         public void DeleteUserAttribute(string userId, string attribute);
         //policy users results section
-        public bool GetPolicyUsersResults(string policyName, string userId);
+        public bool? GetPolicyUsersResults(string policyName, string userId);
         public void SetPolicyUsersResults(string policyName, string userId, bool allowed);
         public void DeletePolicyUsersResults(string policyName);
         //resource computed results section
@@ -98,8 +98,13 @@ namespace LinxABAC.Queries
             _database.HashDelete($"UserAttributes_{userId}", attribute);
         }
 
-
-        public bool GetPolicyUsersResults(string policyName, string userId)
+        /// <summary>
+        /// get the computed result for user policy, returns null if was not exists
+        /// </summary>
+        /// <param name="policyName"></param>
+        /// <param name="userId"></param>
+        /// <returns></returns>
+        public bool? GetPolicyUsersResults(string policyName, string userId)
         {
             var hash = _database.HashGet($"PolicyUsersResults_{policyName}", userId);
             return hash.HasValue && (bool)hash;
