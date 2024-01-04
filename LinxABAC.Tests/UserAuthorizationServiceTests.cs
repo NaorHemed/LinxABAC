@@ -203,5 +203,220 @@ namespace LinxABAC.Tests
             //on resource we set success only, so should not be called
             redisQueriesMock.Verify(x => x.SetUserResourceResultLastUpdate(userId, resource), Times.Never());
         }
+
+
+        [Fact]
+        public void WhenResourceWasAuthorizedAndWasNotChange_CachedResultReturned()
+        {
+            //arrange
+            string resource = "resource";
+            string policy = "policy";
+
+            long now = DateTimeOffset.UtcNow.Ticks;
+
+            //updates was in past
+            redisQueriesMock.Setup(x => x.GetUserLastUpdate(userId)).Returns(now - 1);
+            redisQueriesMock.Setup(x => x.GetPolicyLastUpdate(policy)).Returns(now - 1);
+            redisQueriesMock.Setup(x => x.GetResourceLastUpdate(resource)).Returns(now - 1);
+
+            //now
+            redisQueriesMock.Setup(x => x.GetUserResourceResultLastUpdate(userId, resource)).Returns(now);
+            redisQueriesMock.Setup(x => x.GetUserPolicyResultLastUpdate(userId, policy)).Returns(now);
+
+            //cached results setup, for resource we only cache the policy which we got authorized from
+            redisQueriesMock.Setup(x => x.GetResourceUserAccess(resource, userId)).Returns(policy);
+            redisQueriesMock.Setup(x => x.GetPolicyUsersResults(policy, userId)).Returns(true);
+
+            //act 
+            bool result = sut.IsAuthorized(resource, userId);
+
+            //assert
+            Assert.True(result);
+
+            //new last update must not be set
+            redisQueriesMock.Verify(x => x.SetUserLastUpdate(userId), Times.Never());
+            redisQueriesMock.Verify(x => x.SetUserPolicyResultLastUpdate(userId, policy), Times.Never());
+            redisQueriesMock.Verify(x => x.SetUserResourceResultLastUpdate(userId, resource), Times.Never());
+            //querying data should not be
+            redisQueriesMock.Verify(x => x.GetUserAttributes(userId), Times.Never());
+            redisQueriesMock.Verify(x => x.GetUserAttribute(userId, It.IsAny<string>()), Times.Never());
+            redisQueriesMock.Verify(x => x.GetPolicy(policy), Times.Never());
+            redisQueriesMock.Verify(x => x.GetResourcePolicies(resource), Times.Never());
+        }
+
+        [Fact]
+        public void WhenResourceWasAuthorizedAndWasUpdated_ResourcePolicyCheckedAgain_AndCachedPolicyResultUsed()
+        {
+            //arrange
+            string resource = "resource";
+            string policy = "policy";
+
+            long now = DateTimeOffset.UtcNow.Ticks;
+
+            redisQueriesMock.Setup(x => x.GetResourcePolicies(resource)).Returns(new List<string>() { policy });
+
+            //updates was in past except resource
+            redisQueriesMock.Setup(x => x.GetUserLastUpdate(userId)).Returns(now - 1);
+            redisQueriesMock.Setup(x => x.GetPolicyLastUpdate(policy)).Returns(now - 1);
+            redisQueriesMock.Setup(x => x.GetResourceLastUpdate(resource)).Returns(now); //look here
+
+            //now
+            redisQueriesMock.Setup(x => x.GetUserResourceResultLastUpdate(userId, resource)).Returns(now);
+            redisQueriesMock.Setup(x => x.GetUserPolicyResultLastUpdate(userId, policy)).Returns(now);
+
+            //cached results setup, for resource we only cache the policy which we got authorized from
+            redisQueriesMock.Setup(x => x.GetResourceUserAccess(resource, userId)).Returns(policy);
+            redisQueriesMock.Setup(x => x.GetPolicyUsersResults(policy, userId)).Returns(true);
+
+            //act 
+            bool result = sut.IsAuthorized(resource, userId);
+
+            //assert
+            Assert.True(result);
+
+            //new last update must not be set
+            redisQueriesMock.Verify(x => x.SetUserLastUpdate(userId), Times.Never());
+            redisQueriesMock.Verify(x => x.SetUserPolicyResultLastUpdate(userId, policy), Times.Never());
+            
+            //querying data should not be
+            redisQueriesMock.Verify(x => x.GetUserAttributes(userId), Times.Never());
+            redisQueriesMock.Verify(x => x.GetUserAttribute(userId, It.IsAny<string>()), Times.Never());
+            redisQueriesMock.Verify(x => x.GetPolicy(policy), Times.Never());
+
+            //new resource last update and result should be set
+            redisQueriesMock.Verify(x => x.SetUserResourceResultLastUpdate(userId, resource), Times.Once());
+            redisQueriesMock.Verify(x => x.GetResourcePolicies(resource), Times.Once());
+        }
+
+        [Fact]
+        public void WhenPolicyWasAuthorizedAndWasUpdated_ResourcePolicyCheckedAgain_AndCachedPolicyResultUsed()
+        {
+            //arrange
+            string resource = "resource";
+            string policy = "policy";
+
+            long now = DateTimeOffset.UtcNow.Ticks;
+
+            redisQueriesMock.Setup(x => x.GetResourcePolicies(resource)).Returns(new List<string>() { policy });
+
+            redisQueriesMock.Setup(x => x.GetPolicy(policy))
+                .Returns(new List<PolicyConditionDto>
+                {
+                    { new PolicyConditionDto("x", "=", "5") },
+                });
+
+            Dictionary<string, string> userAttributes = new Dictionary<string, string>()
+            {
+                { "x", "5" },
+            };
+
+            Dictionary<string, string> attributeDefnitions = new Dictionary<string, string>()
+            {
+                { "x", Constants.IntegerAttribute }
+            };
+
+            redisQueriesMock.Setup(x => x.GetUserAttributes(userId)).Returns(userAttributes);
+            redisQueriesMock.Setup(x => x.GetUserAttribute(userId, It.IsAny<string>()))
+                .Returns<string, string>((_, attribute) => userAttributes[attribute]);
+            redisQueriesMock.Setup(x => x.GetAttributeDefinition(It.IsAny<string>()))
+                .Returns<string>((attribute) => attributeDefnitions[attribute]);
+
+            //updates was in past except policy
+            redisQueriesMock.Setup(x => x.GetUserLastUpdate(userId)).Returns(now - 1);
+            redisQueriesMock.Setup(x => x.GetPolicyLastUpdate(policy)).Returns(now); //look here
+            redisQueriesMock.Setup(x => x.GetResourceLastUpdate(resource)).Returns(now - 1); 
+
+            //now
+            redisQueriesMock.Setup(x => x.GetUserResourceResultLastUpdate(userId, resource)).Returns(now);
+            redisQueriesMock.Setup(x => x.GetUserPolicyResultLastUpdate(userId, policy)).Returns(now);
+
+            //cached results setup, for resource we only cache the policy which we got authorized from
+            redisQueriesMock.Setup(x => x.GetResourceUserAccess(resource, userId)).Returns(policy);
+            redisQueriesMock.Setup(x => x.GetPolicyUsersResults(policy, userId)).Returns(true);
+
+            //act 
+            bool result = sut.IsAuthorized(resource, userId);
+
+            //assert
+            Assert.True(result);
+
+            //new last update must not be set
+            redisQueriesMock.Verify(x => x.SetUserLastUpdate(userId), Times.Never());
+            redisQueriesMock.Verify(x => x.SetUserPolicyResultLastUpdate(userId, policy), Times.Once());
+
+            //should check and evaluate policy
+            redisQueriesMock.Verify(x => x.GetUserAttribute(userId, It.IsAny<string>()), Times.Once());
+            redisQueriesMock.Verify(x => x.GetPolicy(policy), Times.Once());
+
+            //new resource last update and result should be set
+            redisQueriesMock.Verify(x => x.SetUserResourceResultLastUpdate(userId, resource), Times.Once());
+            redisQueriesMock.Verify(x => x.GetResourcePolicies(resource), Times.Once());
+        }
+
+        [Fact]
+        public void WhenUserWasAuthorizedAndWasUpdated_ResourcePolicyCheckedAgain_AndCachedPolicyAndResourceResultShouldSet()
+        {
+            //arrange
+            string resource = "resource";
+            string policy = "policy";
+
+            long now = DateTimeOffset.UtcNow.Ticks;
+
+            redisQueriesMock.Setup(x => x.GetResourcePolicies(resource)).Returns(new List<string>() { policy });
+
+            redisQueriesMock.Setup(x => x.GetPolicy(policy))
+                .Returns(new List<PolicyConditionDto>
+                {
+                    { new PolicyConditionDto("x", "=", "5") },
+                });
+
+            Dictionary<string, string> userAttributes = new Dictionary<string, string>()
+            {
+                { "x", "5" },
+            };
+
+            Dictionary<string, string> attributeDefnitions = new Dictionary<string, string>()
+            {
+                { "x", Constants.IntegerAttribute }
+            };
+
+            redisQueriesMock.Setup(x => x.GetUserAttributes(userId)).Returns(userAttributes);
+            redisQueriesMock.Setup(x => x.GetUserAttribute(userId, It.IsAny<string>()))
+                .Returns<string, string>((_, attribute) => userAttributes[attribute]);
+            redisQueriesMock.Setup(x => x.GetAttributeDefinition(It.IsAny<string>()))
+                .Returns<string>((attribute) => attributeDefnitions[attribute]);
+
+            //updates was in past except user
+            redisQueriesMock.Setup(x => x.GetUserLastUpdate(userId)).Returns(now); //look here
+            redisQueriesMock.Setup(x => x.GetPolicyLastUpdate(policy)).Returns(now - 1); 
+            redisQueriesMock.Setup(x => x.GetResourceLastUpdate(resource)).Returns(now - 1);
+
+            //now
+            redisQueriesMock.Setup(x => x.GetUserResourceResultLastUpdate(userId, resource)).Returns(now);
+            redisQueriesMock.Setup(x => x.GetUserPolicyResultLastUpdate(userId, policy)).Returns(now);
+
+            //cached results setup, for resource we only cache the policy which we got authorized from
+            redisQueriesMock.Setup(x => x.GetResourceUserAccess(resource, userId)).Returns(policy);
+            redisQueriesMock.Setup(x => x.GetPolicyUsersResults(policy, userId)).Returns(true);
+
+            //act 
+            bool result = sut.IsAuthorized(resource, userId);
+
+            //assert
+            Assert.True(result);
+
+            //new last update on user,resource,policy shiould not be set
+            redisQueriesMock.Verify(x => x.SetUserLastUpdate(userId), Times.Never());
+            redisQueriesMock.Verify(x => x.SetPolicyLastUpdate(policy), Times.Never());
+            redisQueriesMock.Verify(x => x.SetResourceLastUpdate(resource), Times.Never());
+            //new last update should be for results of user resource and user policy
+            redisQueriesMock.Verify(x => x.SetUserPolicyResultLastUpdate(userId, policy), Times.Once());
+            redisQueriesMock.Verify(x => x.SetUserResourceResultLastUpdate(userId, resource), Times.Once());
+
+            //should check and evaluate policy
+            redisQueriesMock.Verify(x => x.GetResourcePolicies(resource), Times.Once());
+            redisQueriesMock.Verify(x => x.GetPolicy(policy), Times.Once());
+            redisQueriesMock.Verify(x => x.GetUserAttribute(userId, It.IsAny<string>()), Times.Once());
+        }
     }
 }
