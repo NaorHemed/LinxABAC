@@ -156,7 +156,7 @@ namespace LinxABAC.Logic
 
                 case "starts_with" when attributeType == Constants.StringAttribute:
                     {
-                        return attributeType.StartsWith(policyCondition.value);
+                        return attributeValue.StartsWith(policyCondition.value);
                     }
                 default:
                     {
